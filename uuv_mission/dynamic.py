@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
 from .terrain import generate_reference_and_limits
+from .control import Controller
 
 class Submarine:
     def __init__(self):
@@ -59,8 +60,18 @@ class Trajectory:
                          color='saddlebrown', alpha=0.3)
         plt.plot(self.position[:, 0], self.position[:, 1], label='Trajectory')
         plt.plot(mission.reference, 'r', linestyle='--', label='Reference')
+        
+        # Set axis limits between -50 and 50
+        plt.ylim(-50, 50)
+
+        
+        plt.xlabel('X Position')
+        plt.ylabel('Y Position (Depth)')
+        plt.title('UUV Mission Trajectory')
+        plt.grid(True, alpha=0.3)
         plt.legend(loc='upper right')
         plt.show()
+
 
 @dataclass
 class Mission:
@@ -86,7 +97,7 @@ class Mission:
 
 
 class ClosedLoop:
-    def __init__(self, plant: Submarine, controller):
+    def __init__(self, plant: Submarine, controller: Controller):
         self.plant = plant
         self.controller = controller
 
@@ -100,14 +111,20 @@ class ClosedLoop:
         actions = np.zeros(T)
         self.plant.reset_state()
 
+
         for t in range(T):
             positions[t] = self.plant.get_position()
             observation_t = self.plant.get_depth()
             # Call your controller here
+            error = mission.reference[t] - observation_t
+            prev_error = 0 if t == 0 else mission.reference[t-1] - positions[t-1][1]
+            actions[t] = self.controller.get_action(error, prev_error)
             self.plant.transition(actions[t], disturbances[t])
 
         return Trajectory(positions)
         
     def simulate_with_random_disturbances(self, mission: Mission, variance: float = 0.5) -> Trajectory:
         disturbances = np.random.normal(0, variance, len(mission.reference))
+        #disturbances = np.zeros(len(mission.reference))  # --- IGNORE ---
+        #print("Disturbances:", disturbances)  # --- IGNORE ---
         return self.simulate(mission, disturbances)
